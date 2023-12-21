@@ -1,5 +1,7 @@
 module UnicodeNext
 
+using Base: ismalformed
+
 #-------------------------------------------------------------------------------
 # APIs defined in Base strings/unicode.jl
 
@@ -164,7 +166,7 @@ const _category_names = [
     "Malformed, bad data",
 ]
 
-category_string(c::UInt32) = _category_names[category_code(c)+1]
+category_string(c) = _category_names[category_code(c)+1]
 
 isassigned(c) = CATEGORY_CN < category_code(c) <= CATEGORY_CO
 
