@@ -3,7 +3,9 @@
 [![Build Status](https://github.com/c42f/UnicodeNext.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/c42f/UnicodeNext.jl/actions/workflows/CI.yml?query=branch%3Amain)
 
 A unicode library which can be upgraded to the latest unicode rules, even on
-old Julia versions.
+old Julia versions. Why do this? I want to resolve some JuliaSyntax
+compatibility issues mentioned at
+https://github.com/JuliaLang/JuliaSyntax.jl/pull/381
 
 The interface here is an amalgamation of Julia's `Unicode` stdlib and the
 functions from Base's strings/unicode.jl. The implementation is a Julia port of
