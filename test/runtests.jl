@@ -15,7 +15,7 @@ using UnicodeNext: textwidth, lowercase, uppercase, titlecase,
 
     @test lowercase('A') == 'a'
     @test lowercase('Ö') == 'ö'
-    
+
     @test uppercase('a') == 'A'
     @test uppercase('ê') == 'Ê'
 
@@ -33,6 +33,7 @@ using UnicodeNext: textwidth, lowercase, uppercase, titlecase,
     @test category_string('a') == "Letter, lowercase"
     @test category_string('\n') == "Other, control"
 
+    @test isassigned(101) == true
     @test isassigned('a') == true
     @test isassigned('\u378') == false
 
@@ -98,6 +99,7 @@ using UnicodeNext: textwidth, lowercase, uppercase, titlecase,
         "🏳️\u200d🌈"
         "b"
     ]
+    @test graphemes("exposé", 3:6) = "posé"
 
     # FIXME: This stateful API sucks. Why do we need to provide both characters?
     gs = GraphemeState()
@@ -107,6 +109,16 @@ using UnicodeNext: textwidth, lowercase, uppercase, titlecase,
     @test begin gs, brk = isgraphemebreak(gs, '\ufe0f', '\u200d');  brk == false  end
     @test begin gs, brk = isgraphemebreak(gs, '\u200d', '🌈');      brk == false  end
     @test begin gs, brk = isgraphemebreak(gs, '🌈', 'b');           brk == true   end
+
+    @test julia_chartransform('\u00B5') == '\u03bc'
+    @test julia_chartransform('x') == 'x'
+
+    s1 = "no\u00EBl"
+    s2 = "noe\u0308l"
+    @test s1 != s2
+    @test isequal_normalized(s1, s2)
+    @test isequal_normalized(s1, "noel", stripmark=true)
+    @test isequal_normalized(s1, "NOËL", casefold=true)
 end
 
 # TODO:
