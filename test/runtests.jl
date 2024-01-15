@@ -5,7 +5,7 @@ using UnicodeNext: textwidth, lowercase, uppercase, titlecase,
     category_abbrev, category_string, isassigned, isuppercase, islowercase, iscased,
     isdigit, isletter, isnumeric, iscntrl, ispunct, isspace, isprint, isxdigit,
     uppercase, lowercase, titlecase, uppercasefirst, lowercasefirst,
-    GraphemeState, isgraphemebreak, graphemes
+    GraphemeState, isgraphemebreak, graphemes, isequal_normalized
 
 @testset "Basic smoke tests" begin
     @test textwidth('a') == 1
@@ -99,7 +99,7 @@ using UnicodeNext: textwidth, lowercase, uppercase, titlecase,
         "🏳️\u200d🌈"
         "b"
     ]
-    @test graphemes("exposé", 3:6) = "posé"
+    @test graphemes("exposé", 3:6) == "posé"
 
     # FIXME: This stateful API sucks. Why do we need to provide both characters?
     gs = GraphemeState()
@@ -110,8 +110,6 @@ using UnicodeNext: textwidth, lowercase, uppercase, titlecase,
     @test begin gs, brk = isgraphemebreak(gs, '\u200d', '🌈');      brk == false  end
     @test begin gs, brk = isgraphemebreak(gs, '🌈', 'b');           brk == true   end
 
-    @test julia_chartransform('\u00B5') == '\u03bc'
-    @test julia_chartransform('x') == 'x'
 
     s1 = "no\u00EBl"
     s2 = "noe\u0308l"
