@@ -330,9 +330,20 @@ const INDIC_CONJUNCT_BREAK_EXTEND = 3
 # The utf8proc supported Unicode version as a string MAJOR.MINOR.PATCH.
 const unicode_version = v"15.1.0"
 
+const _error_strings = [
+    "Memory for processing UTF-8 data could not be allocated."
+    "UTF-8 string is too long to be processed."
+    "Invalid UTF-8 string"
+    "Unassigned Unicode code point found in UTF-8 string."
+    "Invalid options for UTF-8 processing chosen."
+]
+
 # Returns an informative error string for the given utf8proc error code
-# (e.g. the error codes returned by utf8proc_map()).
-# const char *utf8proc_errmsg(utf8proc_ssize_t errcode)
+function errmsg(code)
+    return code < 0 && code >= ERROR_INVALIDOPTS ?
+        _error_strings[-code] :
+        "An unknown error occurred while processing UTF-8 data."
+end
 
 #
 # Reads a single codepoint from the UTF-8 sequence being pointed to by `str`.
