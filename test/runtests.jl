@@ -104,12 +104,12 @@ using UnicodeNext: textwidth, lowercase, uppercase, titlecase,
     # FIXME: This stateful API sucks. Why do we need to provide both characters?
     gs = GraphemeState()
     # Following is the codepoint breakdown of 🏳️‍🌈
-    @test begin gs, brk = isgraphemebreak(gs, 'a', '\U1F3F3');      brk == true   end
-    @test begin gs, brk = isgraphemebreak(gs, '\U1F3F3', '\ufe0f'); brk == false  end
-    @test begin gs, brk = isgraphemebreak(gs, '\ufe0f', '\u200d');  brk == false  end
-    @test begin gs, brk = isgraphemebreak(gs, '\u200d', '🌈');      brk == false  end
-    @test begin gs, brk = isgraphemebreak(gs, '🌈', 'b');           brk == true   end
-
+    @test begin gs, brk = isgraphemebreak(gs, 'a');       brk == true   end
+    @test begin gs, brk = isgraphemebreak(gs, '\U1F3F3'); brk == true   end
+    @test begin gs, brk = isgraphemebreak(gs, '\ufe0f');  brk == false  end
+    @test begin gs, brk = isgraphemebreak(gs, '\u200d');  brk == false  end
+    @test begin gs, brk = isgraphemebreak(gs, '🌈');      brk == false  end
+    @test begin gs, brk = isgraphemebreak(gs, 'b');       brk == true   end
 
     s1 = "no\u00EBl"
     s2 = "noe\u0308l"
@@ -122,3 +122,5 @@ end
 # TODO:
 # * Port utf8proc tests?
 # * Port Base tests?
+
+include("graphemebreak.jl")

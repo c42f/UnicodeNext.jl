@@ -328,7 +328,7 @@ const INDIC_CONJUNCT_BREAK_CONSONANT = 2
 const INDIC_CONJUNCT_BREAK_EXTEND = 3
 
 # The utf8proc supported Unicode version as a string MAJOR.MINOR.PATCH.
-const unicode_version = v"15.1.0"
+const UNICODE_VERSION = v"15.1.0"
 
 const _error_strings = [
     "Memory for processing UTF-8 data could not be allocated."

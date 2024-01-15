@@ -486,13 +486,12 @@ julia> titlecase("a-a b-b", wordsep = c->c==' ')
 function titlecase(s::AbstractString; wordsep::Function = !isletter, strict::Bool=true)
     startword = true
     state = GraphemeState()
-    c0 = eltype(s)(0x00000000)
     b = IOBuffer()
     for c in s
         # Note: It would be better to have a word iterator following UAX#29,
         # similar to our grapheme iterator, but utf8proc does not yet have
         # this information.  At the very least we shouldn't break inside graphemes.
-        state, isbreak = isgraphemebreak(state, c0, c)
+        state, isbreak = isgraphemebreak(state, c)
         if isbreak && wordsep(c)
             print(b, c)
             startword = true
@@ -500,7 +499,6 @@ function titlecase(s::AbstractString; wordsep::Function = !isletter, strict::Boo
             print(b, startword ? titlecase(c) : strict ? lowercase(c) : c)
             startword = false
         end
-        c0 = c
     end
     return String(take!(b))
 end
@@ -561,21 +559,19 @@ end
 
 GraphemeState() = GraphemeState(0, 0)
 
-# Stateful grapheme break required by Unicode-9 rules: the string
-# must be processed in sequence, with state initialized to Ref{Int32}(0).
-# Requires utf8proc v2.0 or later.
-function isgraphemebreak(state::GraphemeState, c1::AbstractChar, c2::AbstractChar)
-    if Base.ismalformed(c1) || Base.ismalformed(c2)
-        return (true, GraphemeState())
+GraphemeState(c::AbstractChar) = isgraphemebreak(GraphemeState(), c)[1]
+
+# Stateful grapheme break required by Unicode-9 rules
+function isgraphemebreak(state::GraphemeState, c::AbstractChar)
+    if Base.ismalformed(c)
+        return (GraphemeState(), true)
     end
-    u1 = UInt32(c1)
-    u2 = UInt32(c2)
-    packedstate = state.boundclass | (state.indic_conjunct_break << 8)
-    p1 = get_property(u1)
-    p2 = get_property(u2)
+    u = UInt32(c)
+    p = get_property(u)
+    packedstate = state.boundclass | (UInt32(state.indic_conjunct_break) << 8)
     break_permitted, packedstate =
-        _grapheme_break_extended(p1.boundclass, p2.boundclass,
-                                 p1.indic_conjunct_break, p2.indic_conjunct_break,
+        _grapheme_break_extended(0, p.boundclass,
+                                 0, p.indic_conjunct_break,
                                  packedstate)
     state = GraphemeState(packedstate & 0xff, packedstate >> 8)
     return (state, break_permitted)
@@ -588,34 +584,49 @@ end
 Base.eltype(::Type{GraphemeIterator{S}}) where {S} = SubString{S}
 Base.eltype(::Type{GraphemeIterator{SubString{S}}}) where {S} = SubString{S}
 
+# Iterator size can be known, but is O(N) to calculate so it's faster to
+# declare iterator size unknown. `length()` can still be used, though.
+Base.IteratorSize(::Type{GraphemeIterator{S}}) where {S} = Base.SizeUnknown()
+
 function Base.length(g::GraphemeIterator{S}) where {S}
-    c0 = eltype(S)(0x00000000)
     n = 0
     state = GraphemeState()
     for c in g.s
-        state, isbreak = isgraphemebreak(state, c0, c)
+        state, isbreak = isgraphemebreak(state, c)
         n += isbreak
-        c0 = c
     end
     return n
 end
 
-function Base.iterate(g::GraphemeIterator, i_=(GraphemeState(),firstindex(g.s)))
+function Base.iterate(g::GraphemeIterator)
     s = g.s
-    state, i = i_
+    y = iterate(s)
+    isnothing(y) && return nothing
+    i = firstindex(s)
+    c, k = y
+    iterate(g, (GraphemeState(c), i, k))
+end
+
+function Base.iterate(g::GraphemeIterator, i_)
+    s = g.s
+    gstate, i, k = i_
+    # here we compute four indices: i,j,i2,k
+    # i:j == range of current grapheme we're building
+    # i2  == nextind(s, j)  - potential start of next grapheme
+    # k   == nextind(s, i2) - index after i2
+    i == k && return nothing
     j = i
-    y = iterate(s, i)
-    y === nothing && return nothing
-    c0, k = y
-    while k <= ncodeunits(s) # loop until next grapheme is s[i:j]
-        c, ℓ = iterate(s, k)::NTuple{2,Any}
-        state, isbreak = isgraphemebreak(state, c0, c)
+    i2 = k
+    while true
+        y = iterate(s, k)
+        isnothing(y) && break
+        c, k = y::NTuple{2,Any}
+        gstate, isbreak = isgraphemebreak(gstate, c)
         isbreak && break
-        j = k
-        k = ℓ
-        c0 = c
+        j = i2
+        i2 = k
     end
-    return (SubString(s, i, j), (state, k))
+    return (SubString(s, i, j), (gstate, i2, k))
 end
 
 Base.:(==)(g1::GraphemeIterator, g2::GraphemeIterator) = g1.s == g2.s
@@ -672,16 +683,14 @@ function graphemes(s::AbstractString, r::AbstractUnitRange{<:Integer})
     m, n = Int(first(r)), Int(last(r))
     m > 0 || throw(ArgumentError("starting index $m is not ≥ 1"))
     n < m && return @view s[1:0]
-    c0 = eltype(s)(0x00000000)
     state = GraphemeState()
     count = 0
     i, iprev, ilast = 1, 1, lastindex(s)
     # find the start of the m-th grapheme
     while i ≤ ilast && count < m
         @inbounds c = s[i]
-        state, isbreak = isgraphemebreak(state, c0, c)
+        state, isbreak = isgraphemebreak(state, c)
         count += isbreak
-        c0 = c
         i, iprev = nextind(s, i), i
     end
     start = iprev
@@ -689,10 +698,9 @@ function graphemes(s::AbstractString, r::AbstractUnitRange{<:Integer})
     # find the end of the n-th grapheme
     while i ≤ ilast
         @inbounds c = s[i]
-        state, isbreak = isgraphemebreak(state, c0, c)
+        state, isbreak = isgraphemebreak(state, c)
         count += isbreak
         count > n && break
-        c0 = c
         i, iprev = nextind(s, i), i
     end
     count < n && throw(BoundsError(s, i))
