@@ -23,6 +23,15 @@ end
     end
     samples = read_grapheme_break_samples(test_data_path)
     @testset "$(repr(join(clusters)))" for clusters in samples
-        @test collect(graphemes(join(clusters))) == clusters
+        str = join(clusters)
+        @test collect(graphemes(str)) == clusters
+        # Also test range-based version
+        n = length(clusters)
+        for i=1:n
+            r1 = i:n
+            @test graphemes(str, r1) == join(clusters[r1])
+            r2 = 1:n-i+1
+            @test graphemes(str, r2) == join(clusters[r2])
+        end
     end
 end
