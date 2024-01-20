@@ -101,25 +101,25 @@ const ERROR_INVALIDOPTS = -5
 
 #-------------------------------------------------------------------------------
 # Internal constants
-const HANGUL_SBASE  = 0xAC00
-const HANGUL_LBASE  = 0x1100
-const HANGUL_VBASE  = 0x1161
-const HANGUL_TBASE  = 0x11A7
+const HANGUL_SBASE  = 0x0000AC00
+const HANGUL_LBASE  = 0x00001100
+const HANGUL_VBASE  = 0x00001161
+const HANGUL_TBASE  = 0x000011A7
 const HANGUL_LCOUNT = 19
 const HANGUL_VCOUNT = 21
 const HANGUL_TCOUNT = 28
 const HANGUL_NCOUNT = 588
 const HANGUL_SCOUNT = 11172
 # END is exclusive
-const HANGUL_L_START  = 0x1100
-const HANGUL_L_END    = 0x115A
-const HANGUL_L_FILLER = 0x115F
-const HANGUL_V_START  = 0x1160
-const HANGUL_V_END    = 0x11A3
-const HANGUL_T_START  = 0x11A8
-const HANGUL_T_END    = 0x11FA
-const HANGUL_S_START  = 0xAC00
-const HANGUL_S_END    = 0xD7A4
+const HANGUL_L_START  = 0x00001100
+const HANGUL_L_END    = 0x0000115A
+const HANGUL_L_FILLER = 0x0000115F
+const HANGUL_V_START  = 0x00001160
+const HANGUL_V_END    = 0x000011A3
+const HANGUL_T_START  = 0x000011A8
+const HANGUL_T_END    = 0x000011FA
+const HANGUL_S_START  = 0x0000AC00
+const HANGUL_S_END    = 0x0000D7A4
 
 
 # Holds the value of a property.
@@ -327,7 +327,7 @@ const INDIC_CONJUNCT_BREAK_LINKER = 1
 const INDIC_CONJUNCT_BREAK_CONSONANT = 2
 const INDIC_CONJUNCT_BREAK_EXTEND = 3
 
-# The utf8proc supported Unicode version as a string MAJOR.MINOR.PATCH.
+# The supported Unicode version as MAJOR.MINOR.PATCH.
 const UNICODE_VERSION = v"15.1.0"
 
 const _error_strings = [
@@ -448,6 +448,8 @@ end
 #   1 => 1101896
 const MAX_DECOMPOSE_CODEPOINTS = 4
 
+const DecomposedCharBuf = typeof(Ref{NTuple{MAX_DECOMPOSE_CODEPOINTS,UInt32}}())
+
 """
 Decompose a codepoint into an array of codepoints.
 
@@ -515,23 +517,23 @@ function decompose_char(uc::UInt32, dst::Ptr{UInt32}, bufsize, options, last_bou
 
     if options & LUMP != 0
         replacement_uc =
-            category == CATEGORY_ZS                                       ? 0x0020 :
-            uc == 0x2018 || uc == 0x2019 || uc == 0x02BC || uc == 0x02C8  ? 0x0027 :
-            category == CATEGORY_PD || uc == 0x2212                       ? 0x002D :
-            uc == 0x2044 || uc == 0x2215                                  ? 0x002F :
-            uc == 0x2236                                                  ? 0x003A :
-            uc == 0x2039 || uc == 0x2329 || uc == 0x3008                  ? 0x003C :
-            uc == 0x203A || uc == 0x232A || uc == 0x3009                  ? 0x003E :
-            uc == 0x2216                                                  ? 0x005C :
-            uc == 0x02C4 || uc == 0x02C6 || uc == 0x2038 || uc == 0x2303  ? 0x005E :
-            category == CATEGORY_PC || uc == 0x02CD                       ? 0x005F :
-            uc == 0x02CB                                                  ? 0x0060 :
-            uc == 0x2223                                                  ? 0x007C :
-            uc == 0x223C                                                  ? 0x007E :
+            category == CATEGORY_ZS                                       ? 0x00000020 :
+            uc == 0x2018 || uc == 0x2019 || uc == 0x02BC || uc == 0x02C8  ? 0x00000027 :
+            category == CATEGORY_PD || uc == 0x2212                       ? 0x0000002D :
+            uc == 0x2044 || uc == 0x2215                                  ? 0x0000002F :
+            uc == 0x2236                                                  ? 0x0000003A :
+            uc == 0x2039 || uc == 0x2329 || uc == 0x3008                  ? 0x0000003C :
+            uc == 0x203A || uc == 0x232A || uc == 0x3009                  ? 0x0000003E :
+            uc == 0x2216                                                  ? 0x0000005C :
+            uc == 0x02C4 || uc == 0x02C6 || uc == 0x2038 || uc == 0x2303  ? 0x0000005E :
+            category == CATEGORY_PC || uc == 0x02CD                       ? 0x0000005F :
+            uc == 0x02CB                                                  ? 0x00000060 :
+            uc == 0x2223                                                  ? 0x0000007C :
+            uc == 0x223C                                                  ? 0x0000007E :
             (options & NLF2LS != 0) && (options & NLF2PS != 0) &&
-              (category == CATEGORY_ZL || category == CATEGORY_ZP)        ? 0x000A :
-            0x0000
-        if replacement_uc != 0x0000
+              (category == CATEGORY_ZL || category == CATEGORY_ZP)        ? 0x0000000A :
+            0x00000000
+        if replacement_uc != 0x00000000
             return decompose_char(replacement_uc, dst, bufsize,
                                   options & ~UInt32(LUMP), last_boundclass)
         end
@@ -597,7 +599,7 @@ end
 # )
 # ^ TODO
 function utf8proc_decompose(s::AbstractString, options)
-    charbuf_ref = Ref{NTuple{MAX_DECOMPOSE_CODEPOINTS,UInt32}}()
+    charbuf_ref = DecomposedCharBuf()
     charbuf = Ptr{UInt32}(Base.pointer_from_objref(charbuf_ref))
     last_boundclass = Ref{Int32}(0)
     io = IOBuffer()
@@ -606,7 +608,6 @@ function utf8proc_decompose(s::AbstractString, options)
             if isvalid(c)
                 uc = UInt32(c)
                 n = decompose_char(uc, charbuf, MAX_DECOMPOSE_CODEPOINTS, options, last_boundclass)
-                @assert n <= MAX_DECOMPOSE_CODEPOINTS
                 for i = 1:n
                     write(io, Char(unsafe_load(charbuf, i)))
                 end

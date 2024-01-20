@@ -708,11 +708,12 @@ function graphemes(s::AbstractString, r::AbstractUnitRange{<:Integer})
 end
 
 function _decompose_char!(codepoint::Union{Integer,Char},
-        dest::Base.RefValue{NTuple{MAX_DECOMPOSE_CODEPOINTS,UInt32}}, options::Integer)
+        dest::DecomposedCharBuf, options::Integer)
     dest_buf = Ptr{UInt32}(Base.pointer_from_objref(dest))
     last_boundclass = Ref{Int32}(0)
     ret = GC.@preserve dest decompose_char(UInt32(codepoint), dest_buf,
-                                        MAX_DECOMPOSE_CODEPOINTS, options, last_boundclass)
+                                           MAX_DECOMPOSE_CODEPOINTS,
+                                           options, last_boundclass)
     ret < 0 && _throw_error(ret)
     return ret
 end
@@ -765,8 +766,8 @@ function isequal_normalized(s1::AbstractString, s2::AbstractString; casefold::Bo
     stripmark && (options |= STRIPMARK)
     i1,i2 = iterate(s1),iterate(s2)
     # codepoint buffers
-    d1 = Ref{NTuple{MAX_DECOMPOSE_CODEPOINTS,UInt32}}()
-    d2 = Ref{NTuple{MAX_DECOMPOSE_CODEPOINTS,UInt32}}()
+    d1 = DecomposedCharBuf()
+    d2 = DecomposedCharBuf()
     n1 = n2 = 0 # lengths of codepoint buffers
     j1 = j2 = 1 # indices in d1, d2
     while true
