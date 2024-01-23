@@ -5,7 +5,7 @@ using UnicodeNext: textwidth, lowercase, uppercase, titlecase,
     category_abbrev, category_string, isassigned, isuppercase, islowercase, iscased,
     isdigit, isletter, isnumeric, iscntrl, ispunct, isspace, isprint, isxdigit,
     uppercase, lowercase, titlecase, uppercasefirst, lowercasefirst,
-    GraphemeState, isgraphemebreak, graphemes, isequal_normalized
+    GraphemeState, isgraphemebreak, graphemes, isequal_normalized, normalize
 
 @testset "Basic smoke tests" begin
     @test textwidth('a') == 1
@@ -117,6 +117,35 @@ using UnicodeNext: textwidth, lowercase, uppercase, titlecase,
     @test isequal_normalized(s1, s2)
     @test isequal_normalized(s1, "noel", stripmark=true)
     @test isequal_normalized(s1, "NOËL", casefold=true)
+
+    @test normalize("\u0065\u0301") == "\u00e9" # é
+    @test normalize("\u0065\u0301", compose=false) == "\u0065\u0301" # é
+    @test normalize("\u00e9", decompose=true) == "\u0065\u0301" # é
+    # (de)composition with codes > \uffff
+    @test normalize("\U1d158\U1d165\U1d16e") == "\U1d160"  # 𝅘𝅥𝅮
+    @test normalize("\U1d160", decompose=true) == "\U1d158\U1d165\U1d16e"  # 𝅘𝅥𝅮
+    # Hangul composition special cases
+    @test normalize("\U1100\U1161\U11A8") == "\UAC01" # 각
+    @test normalize("\UAC01", decompose=true) == "\U1100\U1161\U11A8" # 각
+
+    @test normalize("\u00b5", compat=true) == "\u03bc" # μ
+    @test normalize("\u00b5", compat=false) == "\u00b5" # μ
+
+    @test normalize("JuLiA", casefold=true) == "julia"
+
+    @test normalize("\r\n \n \r \u0085", newline2ls=true) == "\u2028 \u2028 \u2028 \u2028"
+    @test normalize("\r\n \n \r \u0085", newline2ps=true) == "\u2029 \u2029 \u2029 \u2029"
+    @test normalize("\r\n \n \r \u0085", newline2lf=true) == "\n \n \n \n"
+    @test normalize("\r\n \n \r \u0085", newline2lf=true) == "\n \n \n \n"
+    @test normalize("-a-\0-b-\r\n-c-\n-d-\r-e-\u0085-f-\t-g-", stripcc=true) ==
+        "-a--b- -c- -d- -e- -f- -g-"
+    @test normalize("JúLiA", stripmark=true) == "JuLiA"
+    @test normalize(".\u00ad.", stripignore=true) == ".."
+    @test normalize("a", rejectna=true) == "a"
+    @test_throws ErrorException("Unassigned Unicode code point found in UTF-8 string.") #=
+        =# normalize("\Ue1000", rejectna=true)
+    # Lump all space-like codepoints together, etc
+    @test normalize("\ua0", lump=true) == " "
 end
 
 # TODO:

@@ -101,25 +101,25 @@ const ERROR_INVALIDOPTS = -5
 
 #-------------------------------------------------------------------------------
 # Internal constants
-const HANGUL_SBASE  = 0x0000AC00
-const HANGUL_LBASE  = 0x00001100
-const HANGUL_VBASE  = 0x00001161
-const HANGUL_TBASE  = 0x000011A7
+const HANGUL_SBASE  = Int(0x0000AC00)
+const HANGUL_LBASE  = Int(0x00001100)
+const HANGUL_VBASE  = Int(0x00001161)
+const HANGUL_TBASE  = Int(0x000011A7)
 const HANGUL_LCOUNT = 19
 const HANGUL_VCOUNT = 21
 const HANGUL_TCOUNT = 28
 const HANGUL_NCOUNT = 588
 const HANGUL_SCOUNT = 11172
 # END is exclusive
-const HANGUL_L_START  = 0x00001100
-const HANGUL_L_END    = 0x0000115A
-const HANGUL_L_FILLER = 0x0000115F
-const HANGUL_V_START  = 0x00001160
-const HANGUL_V_END    = 0x000011A3
-const HANGUL_T_START  = 0x000011A8
-const HANGUL_T_END    = 0x000011FA
-const HANGUL_S_START  = 0x0000AC00
-const HANGUL_S_END    = 0x0000D7A4
+const HANGUL_L_START  = Int(0x00001100)
+const HANGUL_L_END    = Int(0x0000115A)
+const HANGUL_L_FILLER = Int(0x0000115F)
+const HANGUL_V_START  = Int(0x00001160)
+const HANGUL_V_END    = Int(0x000011A3)
+const HANGUL_T_START  = Int(0x000011A8)
+const HANGUL_T_END    = Int(0x000011FA)
+const HANGUL_S_START  = Int(0x0000AC00)
+const HANGUL_S_END    = Int(0x0000D7A4)
 
 
 # Holds the value of a property.
@@ -202,10 +202,10 @@ function Base.getproperty(cp::CharProperty, name::Symbol)
     name === :comb_index           ? getfield(cp, :comb_index)         :
     begin
         f = getfield(cp, :flags)
-        name === :bidi_mirrored        ? (f & 0x01 == 0x00)            :
-        name === :comp_exclusion       ? ((f >> 1)  & 0x01 == 0x00)    :
-        name === :ignorable            ? ((f >> 2)  & 0x01 == 0x00)    :
-        name === :control_boundary     ? ((f >> 3)  & 0x01 == 0x00)    :
+        name === :bidi_mirrored        ? (f & 0x01 == 0x01)            :
+        name === :comp_exclusion       ? ((f >> 1)  & 0x01 == 0x01)    :
+        name === :ignorable            ? ((f >> 2)  & 0x01 == 0x01)    :
+        name === :control_boundary     ? ((f >> 3)  & 0x01 == 0x01)    :
         name === :charwidth            ? ((f >> 4)  & 0x03        )    :
         # name === :pad                  ? ((f >> 1) & 0x03        )   :
         name === :boundclass           ? ((f >> 8)  & 0x3f        )    :
@@ -487,7 +487,7 @@ function decompose_char(uc::UInt32, dst::Ptr{UInt32}, bufsize, options, last_bou
     category = property.category
 
     if options & (COMPOSE|DECOMPOSE) != 0
-        hangul_sindex = uc - HANGUL_SBASE
+        hangul_sindex = Int(uc) - HANGUL_SBASE
         if hangul_sindex >= 0 && hangul_sindex < HANGUL_SCOUNT
             if bufsize >= 1
                 unsafe_store!(dst, HANGUL_LBASE + div(hangul_sindex, HANGUL_NCOUNT), 1)
@@ -556,6 +556,7 @@ function decompose_char(uc::UInt32, dst::Ptr{UInt32}, bufsize, options, last_bou
         end
     end
     if options & CHARBOUND != 0
+        # FIXME: Remove this??
         boundary, last_boundclass[] =
             _grapheme_break_extended(0, property.boundclass, 0, property.indic_conjunct_break,
                                      last_boundclass[])
@@ -634,29 +635,141 @@ end
 # ^ TODO
 
 #
- # Normalizes the sequence of `length` codepoints pointed to by `buffer`
- # in-place (i.e., the result is also stored in `buffer`).
- #
- # @param buffer the (native-endian UTF-32) unicode codepoints to re-encode.
- # @param length the length (in codepoints) of the buffer.
- # @param options a bitwise or (`|`) of one or more of the following flags:
- # - @ref NLF2LS  - convert LF, CRLF, CR and NEL into LS
- # - @ref NLF2PS  - convert LF, CRLF, CR and NEL into PS
- # - @ref NLF2LF  - convert LF, CRLF, CR and NEL into LF
- # - @ref STRIPCC - strip or convert all non-affected control characters
- # - @ref COMPOSE - try to combine decomposed codepoints into composite
- #                           codepoints
- # - @ref STABLE  - prohibit combining characters that would violate
- #                           the unicode versioning stability
- #
- # @return
- # In case of success, the length (in codepoints) of the normalized UTF-32 string is
- # returned; otherwise, a negative error code is returned (utf8proc_errmsg()).
- #
- # @warning The entries of the array pointed to by `str` have to be in the
- #          range `0x0000` to `0x10FFFF`. Otherwise, the program might crash!
- #
-# utf8proc_ssize_t utf8proc_normalize_utf32(utf8proc_int32_t *buffer, utf8proc_ssize_t length, utf8proc_option_t options)
+# Normalizes the sequence of `length` codepoints pointed to by `buffer`
+# in-place (i.e., the result is also stored in `buffer`).
+#
+# @param buffer the (native-endian UTF-32) unicode codepoints to re-encode.
+# @param length the length (in codepoints) of the buffer.
+# @param options a bitwise or (`|`) of one or more of the following flags:
+# - @ref NLF2LS  - convert LF, CRLF, CR and NEL into LS
+# - @ref NLF2PS  - convert LF, CRLF, CR and NEL into PS
+# - @ref NLF2LF  - convert LF, CRLF, CR and NEL into LF
+# - @ref STRIPCC - strip or convert all non-affected control characters
+# - @ref COMPOSE - try to combine decomposed codepoints into composite
+#                           codepoints
+# - @ref STABLE  - prohibit combining characters that would violate
+#                           the unicode versioning stability
+#
+# @return
+# In case of success, the length (in codepoints) of the normalized UTF-32 string is
+# returned; otherwise, a negative error code is returned (utf8proc_errmsg()).
+#
+# @warning The entries of the array pointed to by `str` have to be in the
+#          range `0x0000` to `0x10FFFF`. Otherwise, the program might crash!
+#
+function normalize_utf32(buffer::Ptr{UInt32}, length_, options)
+    # NULLTERM option will be ignored, 'length_' is never ignored
+    if options & (NLF2LS | NLF2PS | STRIPCC) != 0
+        wpos = 1
+        rpos = 1
+        while rpos <= length_
+            uc = unsafe_load(buffer, rpos)
+            if uc == 0x000D && rpos < length_ && unsafe_load(buffer, rpos+1) == 0x000A
+                rpos += 1
+            end
+            if uc == 0x000A || uc == 0x000D || uc == 0x0085 ||
+                   ((options & STRIPCC != 0) && (uc == 0x000B || uc == 0x000C))
+                if options & NLF2LS != 0
+                    if options & NLF2PS != 0
+                        unsafe_store!(buffer, 0x000A, wpos)
+                    else
+                        unsafe_store!(buffer, 0x2028, wpos)
+                    end
+                else
+                    if options & NLF2PS != 0
+                        unsafe_store!(buffer, 0x2029, wpos)
+                    else
+                        unsafe_store!(buffer, 0x0020, wpos)
+                    end
+                end
+                wpos += 1
+            elseif (options & STRIPCC != 0) &&
+                   (uc < 0x0020 || (uc >= 0x007F && uc < 0x00A0))
+                if uc == 0x0009
+                    unsafe_store!(buffer, 0x0020, wpos)
+                    wpos += 1
+                end
+            else
+                unsafe_store!(buffer, uc, wpos)
+                wpos += 1
+            end
+            rpos += 1
+        end
+        length_ = wpos - 1
+    end
+    if options & COMPOSE != 0
+        starter_pos::Int = -1
+        starter_property = nothing
+        max_combining_class::Int = -1
+        wpos = 1
+        for rpos = 1:length_
+            current_char = unsafe_load(buffer, rpos)
+            current_property = unsafe_get_property(current_char)
+            if starter_pos != -1 && current_property.combining_class > max_combining_class
+                # combination perhaps possible
+                hangul_lindex = Int(unsafe_load(buffer, starter_pos)) - HANGUL_LBASE
+                if (hangul_lindex >= 0 && hangul_lindex < HANGUL_LCOUNT)
+                    hangul_vindex = Int(current_char) - HANGUL_VBASE
+                    if (hangul_vindex >= 0 && hangul_vindex < HANGUL_VCOUNT)
+                        unsafe_store!(buffer,
+                                     HANGUL_SBASE + (hangul_lindex * HANGUL_VCOUNT +
+                                                     hangul_vindex) * HANGUL_TCOUNT,
+                                     starter_pos)
+                        starter_property = nothing
+                        continue
+                    end
+                end
+                starter_uc = unsafe_load(buffer, starter_pos)
+                hangul_sindex = Int(starter_uc) - HANGUL_SBASE
+                if (hangul_sindex >= 0 && hangul_sindex < HANGUL_SCOUNT &&
+                    (hangul_sindex % HANGUL_TCOUNT) == 0)
+                    hangul_tindex = Int(current_char) - HANGUL_TBASE
+                    if (hangul_tindex >= 0 && hangul_tindex < HANGUL_TCOUNT)
+                        unsafe_store!(buffer, starter_uc + hangul_tindex, starter_pos)
+                        starter_property = nothing
+                        continue
+                    end
+                end
+                if starter_property === nothing
+                    starter_property = unsafe_get_property(unsafe_load(buffer, starter_pos))
+                end
+                if (starter_property.comb_index < 0x8000 &&
+                    current_property.comb_index != typemax(UInt16) &&
+                    current_property.comb_index >= 0x8000)
+                    sidx = starter_property.comb_index
+                    idx = current_property.comb_index & 0x3FFF
+                    if idx >= _combinations[sidx+1] && idx <= _combinations[sidx+2]
+                        idx += sidx + 2 - _combinations[sidx+1]
+                        if current_property.comb_index & 0x4000 != 0
+                            composition = (UInt32(_combinations[idx+1]) << 16) | _combinations[idx+2]
+                        else
+                            composition = UInt32(_combinations[idx+1])
+                        end
+                        if composition > 0 && (options & STABLE == 0 ||
+                                               !unsafe_get_property(composition).comp_exclusion)
+                            unsafe_store!(buffer, composition, starter_pos)
+                            starter_property = nothing
+                            continue
+                        end
+                    end
+                end
+            end
+            unsafe_store!(buffer, current_char, wpos)
+            if current_property.combining_class != 0
+                if current_property.combining_class > max_combining_class
+                    max_combining_class = current_property.combining_class
+                end
+            else
+                starter_pos = wpos
+                starter_property = nothing
+                max_combining_class = -1
+            end
+            wpos += 1
+        end
+        length_ = wpos - 1
+    end
+    return length_
+end
 
 #
  # Reencodes the sequence of `length` codepoints pointed to by `buffer`

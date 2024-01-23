@@ -675,9 +675,6 @@ Because finding grapheme boundaries requires iteration over the
 string contents, the `graphemes(s, m:n)` function requires time
 proportional to the length of the string (number of codepoints)
 before the end of the substring.
-
-!!! compat "Julia 1.9"
-    The `m:n` argument of `graphemes` requires Julia 1.9.
 """
 function graphemes(s::AbstractString, r::AbstractUnitRange{<:Integer})
     m, n = Int(first(r)), Int(last(r))
@@ -705,6 +702,155 @@ function graphemes(s::AbstractString, r::AbstractUnitRange{<:Integer})
     end
     count < n && throw(BoundsError(s, i))
     return @view s[start:iprev]
+end
+
+#-------------------------------------------------------------------------------
+# Unicode normalization
+
+"""
+    Unicode.normalize(s::AbstractString; keywords...)
+    Unicode.normalize(s::AbstractString, normalform::Symbol)
+
+Normalize the string `s`. By default, canonical composition (`compose=true`) is performed without ensuring
+Unicode versioning stability (`compat=false`), which produces the shortest possible equivalent string
+but may introduce composition characters not present in earlier Unicode versions.
+
+Alternatively, one of the four "normal forms" of the Unicode standard can be specified:
+`normalform` can be `:NFC`, `:NFD`, `:NFKC`, or `:NFKD`.  Normal forms C
+(canonical composition) and D (canonical decomposition) convert different visually identical
+representations of the same abstract string into a single canonical form, with form C being
+more compact.  Normal forms KC and KD additionally canonicalize "compatibility equivalents":
+they convert characters that are abstractly similar but visually distinct into a single
+canonical choice (e.g. they expand ligatures into the individual characters), with form KC
+being more compact.
+
+Alternatively, finer control and additional transformations may be obtained by calling
+`Unicode.normalize(s; keywords...)`, where any number of the following boolean keywords
+options (which all default to `false` except for `compose`) are specified:
+
+* `compose=false`: do not perform canonical composition
+* `decompose=true`: do canonical decomposition instead of canonical composition
+  (`compose=true` is ignored if present)
+* `compat=true`: compatibility equivalents are canonicalized
+* `casefold=true`: perform Unicode case folding, e.g. for case-insensitive string comparison
+* `newline2lf=true`, `newline2ls=true`, or `newline2ps=true`: convert various newline
+  sequences (LF, CRLF, CR, NEL) into a linefeed (LF), line-separation (LS), or
+  paragraph-separation (PS) character, respectively
+* `stripmark=true`: strip diacritical marks (e.g. accents)
+* `stripignore=true`: strip Unicode's "default ignorable" characters (e.g. the soft hyphen
+  or the left-to-right marker)
+* `stripcc=true`: strip control characters; horizontal tabs and form feeds are converted to
+  spaces; newlines are also converted to spaces unless a newline-conversion flag was
+  specified
+* `rejectna=true`: throw an error if unassigned code points are found
+* `stable=true`: enforce Unicode versioning stability (never introduce characters missing from earlier Unicode versions)
+
+You can also use the `chartransform` keyword (which defaults to `identity`) to pass an arbitrary
+*function* mapping `Integer` codepoints to codepoints, which is called on each
+character in `s` as it is processed, in order to perform arbitrary additional normalizations.
+For example, by passing `chartransform=Unicode.julia_chartransform`, you can apply a few Julia-specific
+character normalizations that are performed by Julia when parsing identifiers (in addition to
+NFC normalization: `compose=true, stable=true`).
+
+For example, NFKC corresponds to the options `compose=true, compat=true, stable=true`.
+
+# Examples
+```jldoctest
+julia> "é" == Unicode.normalize("é") #LHS: Unicode U+00e9, RHS: U+0065 & U+0301
+true
+
+julia> "μ" == Unicode.normalize("µ", compat=true) #LHS: Unicode U+03bc, RHS: Unicode U+00b5
+true
+
+julia> Unicode.normalize("JuLiA", casefold=true)
+"julia"
+
+julia> Unicode.normalize("JúLiA", stripmark=true)
+"JuLiA"
+```
+"""
+function normalize(
+    s::AbstractString;
+    stable::Bool=false,
+    compat::Bool=false,
+    compose::Bool=true,
+    decompose::Bool=false,
+    stripignore::Bool=false,
+    rejectna::Bool=false,
+    newline2ls::Bool=false,
+    newline2ps::Bool=false,
+    newline2lf::Bool=false,
+    stripcc::Bool=false,
+    casefold::Bool=false,
+    lump::Bool=false,
+    stripmark::Bool=false,
+    chartransform=identity,
+)
+    flags = 0
+    stable && (flags = flags | STABLE)
+    compat && (flags = flags | COMPAT)
+    if decompose
+        flags = flags | DECOMPOSE
+    elseif compose
+        flags = flags | COMPOSE
+    elseif compat || stripmark
+        throw(ArgumentError("compat=true or stripmark=true require compose=true or decompose=true"))
+    end
+    stripignore && (flags = flags | IGNORE)
+    rejectna && (flags = flags | REJECTNA)
+    newline2ls + newline2ps + newline2lf > 1 && throw(ArgumentError("only one newline conversion may be specified"))
+    newline2ls && (flags = flags | NLF2LS)
+    newline2ps && (flags = flags | NLF2PS)
+    newline2lf && (flags = flags | NLF2LF)
+    stripcc && (flags = flags | STRIPCC)
+    casefold && (flags = flags | CASEFOLD)
+    lump && (flags = flags | LUMP)
+    stripmark && (flags = flags | STRIPMARK)
+    _map_chars(s, flags, chartransform)
+end
+
+function normalize(s::AbstractString, nf::Symbol)
+    _map_chars(s, nf === :NFC ? (STABLE | COMPOSE) :
+               nf === :NFD ? (STABLE | DECOMPOSE) :
+               nf === :NFKC ? (STABLE | COMPOSE | COMPAT) :
+               nf === :NFKD ? (STABLE | DECOMPOSE | COMPAT) :
+               throw(ArgumentError(":$nf is not one of :NFC, :NFD, :NFKC, :NFKD")))
+end
+
+function _normalize_to_io!(io, buffer, options)
+    len = normalize_utf32(pointer(buffer), length(buffer), options)
+    @assert len >= 0
+    for i = 1:len
+        write(io, Char(buffer[i]))
+    end
+    empty!(buffer)
+end
+
+function _map_chars(s::AbstractString, options, chartransform=identity)
+    charbuf_ref = DecomposedCharBuf()
+    buffer = Vector{UInt32}()
+    last_boundclass = Ref{Int32}(0) # TODO: Remove ?
+    io = IOBuffer()
+    for c in s
+        c = chartransform(c)
+        if !isvalid(c)
+            last_boundclass[] = 0
+            _normalize_to_io!(io, buffer, options)
+            write(io, c)
+            continue
+        end
+        uc = UInt32(c)
+        GC.@preserve charbuf_ref begin
+            charbuf = Ptr{UInt32}(Base.pointer_from_objref(charbuf_ref))
+            n = decompose_char(uc, charbuf, MAX_DECOMPOSE_CODEPOINTS, options, last_boundclass)
+            n < 0 && _throw_error(n)
+            for i = 1:n
+                push!(buffer, unsafe_load(charbuf, i))
+            end
+        end
+    end
+    _normalize_to_io!(io, buffer, options)
+    String(take!(io))
 end
 
 function _decompose_char!(codepoint::Union{Integer,Char},
@@ -783,8 +929,6 @@ function isequal_normalized(s1::AbstractString, s2::AbstractString; casefold::Bo
         j1 += 1; j2 += 1
     end
 end
-
-
 
 #-------------------------------------------------------------------------------
 
