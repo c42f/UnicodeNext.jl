@@ -2,6 +2,18 @@ module UnicodeNext
 
 using Base: ismalformed
 
+# Compat hacks for older Julia versions
+if VERSION < v"1.1"
+    isnothing(x) = x === nothing
+end
+
+if VERSION < v"1.6"
+    _stringview(s, rng) = SubString(s, rng)
+else
+    _stringview(s, rng) = view(s, rng)
+end
+
+
 # Ported version of the libutf8proc C library
 include("c_lib.jl")
 
@@ -679,7 +691,7 @@ before the end of the substring.
 function graphemes(s::AbstractString, r::AbstractUnitRange{<:Integer})
     m, n = Int(first(r)), Int(last(r))
     m > 0 || throw(ArgumentError("starting index $m is not ≥ 1"))
-    n < m && return @view s[1:0]
+    n < m && return _stringview(s, 1:0)
     state = GraphemeState()
     count = 0
     i, iprev, ilast = 1, 1, lastindex(s)
@@ -701,7 +713,7 @@ function graphemes(s::AbstractString, r::AbstractUnitRange{<:Integer})
         i, iprev = nextind(s, i), i
     end
     count < n && throw(BoundsError(s, i))
-    return @view s[start:iprev]
+    return _stringview(s, start:iprev)
 end
 
 #-------------------------------------------------------------------------------
